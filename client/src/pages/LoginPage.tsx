@@ -1,0 +1,254 @@
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { setUserPresence } from "@/lib/firebase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { User, Lock, ArrowRight } from "lucide-react";
+
+const loginFormSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export default function LoginPage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [rememberMe, setRememberMe] = useState(false);
+
+  const form = useForm<z.infer<typeof loginFormSchema>>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+    },
+  });
+
+  useEffect(() => {
+    const savedUsername = localStorage.getItem("rememberedUsername");
+    if (savedUsername) {
+      form.setValue("username", savedUsername);
+      setRememberMe(true);
+    }
+  }, [form]);
+
+  const loginMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof loginFormSchema>) => {
+      const response = await apiRequest("POST", "/api/auth/login", data);
+      return await response.json();
+    },
+    onSuccess: async (data, variables) => {
+      localStorage.setItem("chatUserId", data.user.id);
+      localStorage.setItem("chatUsername", data.user.username);
+      sessionStorage.setItem("authToken", `${data.user.id}-${Date.now()}`);
+      
+      if (rememberMe) {
+        localStorage.setItem("rememberedUsername", variables.username);
+      } else {
+        localStorage.removeItem("rememberedUsername");
+      }
+      
+      await setUserPresence(data.user.id, data.user.username, true).catch(console.error);
+      
+      setLocation("/");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid username or password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (values: z.infer<typeof loginFormSchema>) => {
+    loginMutation.mutate(values);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#0a0a0a]">
+      {/* Animated background gradients - matching register page */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(205,255,0,0.08),transparent_40%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(205,255,0,0.06),transparent_40%)]" />
+      
+      {/* Noise texture overlay */}
+      <div className="absolute inset-0 opacity-[0.02] mix-blend-overlay"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' /%3E%3C/svg%3E")`
+        }}
+      />
+
+      {/* Decorative corner accents */}
+      <div className="absolute top-8 left-8 w-24 h-24 border-l-2 border-t-2 border-[#CDFF00]/20 rounded-tl-lg" />
+      <div className="absolute bottom-8 right-8 w-24 h-24 border-r-2 border-b-2 border-[#CDFF00]/20 rounded-br-lg" />
+      
+      <div className="w-full max-w-md relative z-10 fade-in px-4">
+        <div className="text-center mb-6 sm:mb-8 slide-up">
+          <h1 
+            className="text-3xl sm:text-4xl font-bold mb-2"
+            style={{
+              color: "#CDFF00",
+              textShadow: "0 0 30px rgba(205, 255, 0, 0.3)"
+            }}
+          >
+            ReConnect
+          </h1>
+          <p className="text-white/70 text-sm sm:text-base">
+            Sign in to continue
+          </p>
+        </div>
+
+        <div 
+          className="backdrop-blur-sm rounded-md p-6 sm:p-8 slide-up" 
+          style={{ 
+            animationDelay: '0.1s',
+            background: "rgba(10, 10, 10, 0.6)",
+            borderColor: "rgba(205, 255, 0, 0.2)",
+            border: "1px solid rgba(205, 255, 0, 0.2)"
+          }}
+        >
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel 
+                      className="text-sm font-medium"
+                      style={{ color: "rgba(255, 255, 255, 0.9)" }}
+                    >
+                      Username
+                    </FormLabel>
+                    <FormControl>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <User 
+                            className="w-4 h-4 transition-colors" 
+                            style={{ color: "rgba(205, 255, 0, 0.5)" }}
+                          />
+                        </div>
+                        <Input
+                          {...field}
+                          placeholder="Enter your username"
+                          className="pl-10 h-11 transition-all duration-200 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CDFF00] focus-visible:ring-offset-0 focus-visible:border-[#CDFF00]"
+                          style={{
+                            background: "rgba(0, 0, 0, 0.3)",
+                            borderColor: "rgba(205, 255, 0, 0.2)",
+                            color: "rgba(255, 255, 255, 0.9)"
+                          }}
+                          data-testid="input-username"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel 
+                      className="text-sm font-medium"
+                      style={{ color: "rgba(255, 255, 255, 0.9)" }}
+                    >
+                      Password
+                    </FormLabel>
+                    <FormControl>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Lock 
+                            className="w-4 h-4 transition-colors" 
+                            style={{ color: "rgba(205, 255, 0, 0.5)" }}
+                          />
+                        </div>
+                        <Input
+                          {...field}
+                          type="password"
+                          placeholder="Enter your password"
+                          className="pl-10 h-11 transition-all duration-200 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CDFF00] focus-visible:ring-offset-0 focus-visible:border-[#CDFF00]"
+                          style={{
+                            background: "rgba(0, 0, 0, 0.3)",
+                            borderColor: "rgba(205, 255, 0, 0.2)",
+                            color: "rgba(255, 255, 255, 0.9)"
+                          }}
+                          data-testid="input-password"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  className="border-[#CDFF00]/30 data-[state=checked]:bg-[#CDFF00] data-[state=checked]:border-[#CDFF00] data-[state=checked]:text-black"
+                  data-testid="checkbox-remember-me"
+                />
+                <label
+                  htmlFor="remember-me"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  style={{ color: "rgba(255, 255, 255, 0.8)" }}
+                >
+                  Remember me
+                </label>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-11 font-semibold rounded-md transition-all duration-200 group no-default-hover-elevate no-default-active-elevate border-transparent focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style={{
+                  background: "#CDFF00",
+                  color: "#000000"
+                }}
+                disabled={loginMutation.isPending}
+                data-testid="button-login"
+              >
+                {loginMutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Signing in...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    Sign In
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 group-hover:scale-110 group-active:translate-x-6 group-active:opacity-70 transition-all duration-500 ease-out" />
+                  </span>
+                )}
+              </Button>
+            </form>
+          </Form>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+              Don't have an account?{" "}
+              <button
+                onClick={() => setLocation("/register")}
+                className="font-medium transition-colors inline-flex items-center gap-1"
+                style={{ color: "#CDFF00" }}
+                data-testid="link-register"
+              >
+                Create one
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
